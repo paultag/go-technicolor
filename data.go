@@ -28,16 +28,44 @@ func NewANSISequence(arguments []string, ansiType byte) ANSISequence {
 	), ansiType))
 }
 
+func NewTerminalWriter(file *os.File) Writer {
+	output := NewWriter(file)
+	if IsFileTerminal(file) {
+		output = output.EnableColor()
+	} else {
+		output = output.DisableColor()
+	}
+	return output
+}
+
 func NewWriter(o io.Writer) Writer {
 	return Writer{
 		aNSISequences: ANSISequences{},
 		output:        o,
+		enableColor:   false,
 	}
 }
 
 type Writer struct {
 	aNSISequences ANSISequences
 	output        io.Writer
+	enableColor   bool
+}
+
+func (w Writer) DisableColor() Writer {
+	return Writer{
+		aNSISequences: w.aNSISequences,
+		output:        w.output,
+		enableColor:   false,
+	}
+}
+
+func (w Writer) EnableColor() Writer {
+	return Writer{
+		aNSISequences: w.aNSISequences,
+		output:        w.output,
+		enableColor:   true,
+	}
 }
 
 func (w Writer) Bold() Writer {
@@ -48,6 +76,7 @@ func (w Writer) Add(seqs ...ANSISequence) Writer {
 	return Writer{
 		aNSISequences: append(w.aNSISequences, seqs...),
 		output:        w.output,
+		enableColor:   w.enableColor,
 	}
 }
 
@@ -55,6 +84,7 @@ func (w Writer) Reset(seqs ...ANSISequence) Writer {
 	return Writer{
 		aNSISequences: ANSISequences{},
 		output:        w.output,
+		enableColor:   w.enableColor,
 	}
 }
 
@@ -63,7 +93,10 @@ func (w Writer) Printf(format string, args ...interface{}) (int, error) {
 }
 
 func (w Writer) Write(out []byte) (int, error) {
-	return w.output.Write(append(w.aNSISequences.Sequence(), out...))
+	if w.enableColor {
+		return w.output.Write(append(w.aNSISequences.Sequence(), out...))
+	}
+	return w.output.Write(out)
 }
 
 // This is some yanked nasty shaz that will check to see if a file descriptor
